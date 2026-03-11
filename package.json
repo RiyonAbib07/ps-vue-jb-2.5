@@ -1,0 +1,28 @@
+{
+  "name": "vue-after-free",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "babel --extensions \".ts\" src --out-dir dist && mkdir -p dist/download0/img && cp -r src/download0/img/text src/download0/img/susec src/download0/img/feil dist/download0/img/",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.50.0"
+  },
+  "dependencies": {
+    "jiti": "^2.6.1",
+    "neostandard": "^0.12.2"
+  }
+}
