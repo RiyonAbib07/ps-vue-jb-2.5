@@ -1,55 +1,106 @@
-name: Build and Release download0.dat
+name: Build and Release
+
+permissions:
+  contents: write
 
 on:
   push:
-      branches: [ "main" ]
-        workflow_dispatch:
+    branches: [main]
+  workflow_dispatch:
 
-        permissions:
-          contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-          jobs:
-            build:
-                runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-                    steps:
-                          - name: Checkout code
-                                  uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-                                        - name: Setup Node.js
-                                                uses: actions/setup-node@v4
-                                                        with:
-                                                                  node-version: '20'
+      - name: Install dependencies
+        run: npm install
 
-                                                                        - name: Install dependencies
-                                                                                run: npm install
+      - name: Build JS
+        run: npm run build
 
-                                                                                      - name: Build JS
-                                                                                              run: npm run build
+      - name: Copy assets to dist
+        run: |
+          mkdir -p dist/download0/payloads
+          cp src/download0/payloads/*.elf dist/download0/payloads/ 2>/dev/null || true
+          cp src/download0/payloads/*.bin dist/download0/payloads/ 2>/dev/null || true
+          cp -r src/download0/img dist/download0/ 2>/dev/null || true
+          cp -r src/download0/sfx dist/download0/ 2>/dev/null || true
+          cp -r src/download0/vid dist/download0/ 2>/dev/null || true
+          cp src/download0/*.aes dist/download0/ 2>/dev/null || true
+          cp src/download0/config.json dist/download0/ 2>/dev/null || true
 
-                                                                                                    - name: Copy additional root image files
-                                                                                                            run: |
-                                                                                                                      find src/download0/img -maxdepth 1 -type f -exec cp {} dist/download0/img/ \; || true
-                                                                                                                      
-                                                                                                                            - name: Package download0.dat
-                                                                                                                                    run: |
-                                                                                                                                              cd dist/download0
-                                                                                                                                                        zip -r ../../download0.dat *
-                                                                                                                                                        
-                                                                                                                                                              - name: Upload Artifact
-                                                                                                                                                                      uses: actions/upload-artifact@v4
-                                                                                                                                                                              with:
-                                                                                                                                                                                        name: download0.dat
-                                                                                                                                                                                                  path: download0.dat
-                                                                                                                                                                                                  
-                                                                                                                                                                                                        - name: Create Release
-                                                                                                                                                                                                                uses: softprops/action-gh-release@v2
-                                                                                                                                                                                                                        if: github.ref == 'refs/heads/main'
-                                                                                                                                                                                                                                with:
-                                                                                                                                                                                                                                          tag_name: build-${{ github.run_number }}
-                                                                                                                                                                                                                                                    name: Automated Build #${{ github.run_number }}
-                                                                                                                                                                                                                                                              files: download0.dat
-                                                                                                                                                                                                                                                                        body: "Automated build of the PS Vue Jailbreak exploit payload."
-                                                                                                                                                                                                                                                                                env:
-                                                                                                                                                                                                                                                                                          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                                                                                                                                                                                                                                                                                          
+      - name: Generate manifest
+        run: |
+          cd dist/download0
+          find . -type f | sed 's|^\./||' | sort > manifest.txt
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  ufs-image:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create UFS2 image in FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          copyback: true
+          prepare: ""
+          run: |
+            set -e
+
+            # Create 256MB image file
+            truncate -s 256M download0.dat
+
+            # Attach as memory disk
+            MD=$(mdconfig -a -t vnode -f "$(pwd)/download0.dat")
+
+            # Create UFS2 filesystem
+            newfs -O 2 -b 32768 -f 4096 /dev/${MD}
+
+            # Mount
+            mount /dev/${MD} /mnt
+
+            # Copy dist contents
+            cp -R dist/download0/* /mnt/
+
+            # Create empty dirs expected by Vue
+            mkdir -p /mnt/mgl /mnt/video_cache /mnt/xhr_cache
+
+            # Set permissions
+            chmod -R 777 /mnt/*
+
+            # Unmount and detach
+            umount /mnt
+            mdconfig -d -u ${MD}
+
+      - name: Verify image
+        run: file download0.dat
+
+      - name: Upload UFS2 image artifact (download0.dat)
+        uses: actions/upload-artifact@v4
+        with:
+          name: download0.dat
+          path: download0.dat
+
+      - name: Delete dist artifact (cleanup)
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: dist
