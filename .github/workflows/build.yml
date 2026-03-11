@@ -1,0 +1,55 @@
+name: Build and Release download0.dat
+
+on:
+  push:
+      branches: [ "main" ]
+        workflow_dispatch:
+
+        permissions:
+          contents: write
+
+          jobs:
+            build:
+                runs-on: ubuntu-latest
+
+                    steps:
+                          - name: Checkout code
+                                  uses: actions/checkout@v4
+
+                                        - name: Setup Node.js
+                                                uses: actions/setup-node@v4
+                                                        with:
+                                                                  node-version: '20'
+
+                                                                        - name: Install dependencies
+                                                                                run: npm install
+
+                                                                                      - name: Build JS
+                                                                                              run: npm run build
+
+                                                                                                    - name: Copy additional root image files
+                                                                                                            run: |
+                                                                                                                      find src/download0/img -maxdepth 1 -type f -exec cp {} dist/download0/img/ \; || true
+                                                                                                                      
+                                                                                                                            - name: Package download0.dat
+                                                                                                                                    run: |
+                                                                                                                                              cd dist/download0
+                                                                                                                                                        zip -r ../../download0.dat *
+                                                                                                                                                        
+                                                                                                                                                              - name: Upload Artifact
+                                                                                                                                                                      uses: actions/upload-artifact@v4
+                                                                                                                                                                              with:
+                                                                                                                                                                                        name: download0.dat
+                                                                                                                                                                                                  path: download0.dat
+                                                                                                                                                                                                  
+                                                                                                                                                                                                        - name: Create Release
+                                                                                                                                                                                                                uses: softprops/action-gh-release@v2
+                                                                                                                                                                                                                        if: github.ref == 'refs/heads/main'
+                                                                                                                                                                                                                                with:
+                                                                                                                                                                                                                                          tag_name: build-${{ github.run_number }}
+                                                                                                                                                                                                                                                    name: Automated Build #${{ github.run_number }}
+                                                                                                                                                                                                                                                              files: download0.dat
+                                                                                                                                                                                                                                                                        body: "Automated build of the PS Vue Jailbreak exploit payload."
+                                                                                                                                                                                                                                                                                env:
+                                                                                                                                                                                                                                                                                          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                                                                                                                                                                                                                                                                                          
